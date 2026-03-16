@@ -245,6 +245,9 @@ def _parse_openalex_work(item: dict[str, Any]) -> Paper:
     primary_loc = item.get("primary_location") or {}
     source_info = primary_loc.get("source") or {}
     venue = str(source_info.get("display_name") or "").strip()
+    # BUG-33: arXiv category codes (e.g. cs.LG, stat.ML) are not proper venue names
+    if venue and re.match(r"^[a-z]{2,}\.[A-Z]{2}$", venue):
+        venue = ""
 
     # Citation count
     citation_count = int(item.get("cited_by_count") or 0)

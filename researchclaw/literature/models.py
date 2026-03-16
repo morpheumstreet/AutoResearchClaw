@@ -88,8 +88,14 @@ class Paper:
         authors_str = " and ".join(a.name for a in self.authors) or "Unknown"
 
         # Decide entry type
-        if self.venue and any(
-            kw in self.venue.lower()
+        # BUG-33: Detect arXiv category codes (e.g. cs.LG, stat.ML) used as venue
+        _venue = self.venue or ""
+        _is_arxiv_category = bool(
+            re.match(r"^[a-z]{2,}\.[A-Z]{2}$", _venue.strip())
+        ) if _venue else False
+
+        if _venue and not _is_arxiv_category and any(
+            kw in _venue.lower()
             for kw in (
                 "conference",
                 "proc",
@@ -103,14 +109,14 @@ class Paper:
             )
         ):
             entry_type = "inproceedings"
-            venue_field = f"  booktitle = {{{self.venue}}},"
-        elif self.arxiv_id and not self.venue:
+            venue_field = f"  booktitle = {{{_venue}}},"
+        elif self.arxiv_id and (not _venue or _is_arxiv_category):
             entry_type = "article"
             venue_field = "  journal = {arXiv preprint},"
         else:
             entry_type = "article"
             venue_field = (
-                f"  journal = {{{self.venue or 'Unknown'}}}," if self.venue else ""
+                f"  journal = {{{_venue or 'Unknown'}}}," if _venue else ""
             )
 
         lines = [f"@{entry_type}{{{key},"]

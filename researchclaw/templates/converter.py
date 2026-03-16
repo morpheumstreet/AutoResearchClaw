@@ -113,6 +113,14 @@ def _sanitize_latex_output(tex: str) -> str:
     tex = re.sub(r"\\cite\{\?[^}]*:NOT_IN_BIB\}", "", tex)
     tex = re.sub(r"\[\?[a-zA-Z0-9_:-]+:NOT_IN_BIB\]", "", tex)
 
+    # 1b. Convert leftover raw bracket citations [key2019word, key2020word] → \cite{...}
+    _CITE_KEY_PAT_L = r"[a-zA-Z][a-zA-Z0-9_-]*\d{4}[a-zA-Z0-9_]*"
+    tex = re.sub(
+        rf"\[({_CITE_KEY_PAT_L}(?:\s*,\s*{_CITE_KEY_PAT_L})*)\]",
+        r"\\cite{\1}",
+        tex,
+    )
+
     # 2. Remove HTML entities that survived pre-processing
     tex = tex.replace("&nbsp;", "~")
     tex = tex.replace("&amp;", "\\&")
@@ -144,14 +152,26 @@ def _sanitize_latex_output(tex: str) -> str:
     )
 
     # 6. Remove \texttt{} wrapped raw metric paths that the LLM dumped
+    #    Handles both raw underscores and LaTeX-escaped underscores (\_)
+    #    Pattern: condition/env/step/metric_name: value  (3+ path segments)
     tex = re.sub(
-        r"\\texttt\{[a-zA-Z0-9_/.-]+(?:/[a-zA-Z0-9_/.-]+){2,}(?:\s*=\s*[^}]*)?\}",
+        r"\\texttt\{[a-zA-Z0-9_\\_/.:=-]+(?:/[a-zA-Z0-9_\\_/.:=-]+){2,}(?:\s*[=:]\s*[^}]*)?\}",
         "",
         tex,
     )
 
+    # 6b. Remove entire \item lines that are just metric paths
+    tex = re.sub(
+        r"^\s*\\item\s*\\texttt\{[^}]*\}\s*$",
+        "",
+        tex,
+        flags=re.MULTILINE,
+    )
+
     # 7. Clean up empty \item lines that result from removed content
     tex = re.sub(r"\\item\s*\n\s*\\item", r"\\item", tex)
+    # Also remove completely empty \item lines (just whitespace after \item)
+    tex = re.sub(r"^\s*\\item\s*$", "", tex, flags=re.MULTILINE)
 
     # 8. Remove consecutive blank lines (more than 2)
     tex = re.sub(r"\n{3,}", "\n\n", tex)
@@ -251,10 +271,16 @@ def _preprocess_markdown(md: str) -> str:
     # 2c. Round excessively precise metric values (e.g. 0.9717036975 → 0.9717)
     text = _round_raw_metrics(text)
 
-    # 2d. Remove raw \texttt{...} metric key paths that LLMs dump into prose
-    # Pattern: \texttt{some/long/metric_path/name = 0.1234}
+    # 2d. Remove raw \texttt{...} or backtick-wrapped metric key paths
+    # Pattern: \texttt{some/long/metric_path/name: 0.1234} or `path/to/metric: val`
     text = re.sub(
-        r"\\texttt\{[a-zA-Z0-9_/.-]+(?:/[a-zA-Z0-9_/.-]+){2,}(?:\s*=\s*[^}]*)?\}",
+        r"\\texttt\{[a-zA-Z0-9_/.:=-]+(?:/[a-zA-Z0-9_/.:=-]+){2,}(?:\s*[=:]\s*[^}]*)?\}",
+        "",
+        text,
+    )
+    # Also strip backtick-wrapped metric paths in markdown source
+    text = re.sub(
+        r"`[a-zA-Z0-9_/.-]+(?:/[a-zA-Z0-9_/.-]+){2,}(?:\s*[=:]\s*[^`]*)?`",
         "",
         text,
     )
@@ -1164,7 +1190,9 @@ def _convert_inline(text: str) -> str:
 
     # Fallback: convert any remaining [cite_key] patterns to \cite{key}
     # This catches citations that were not converted upstream.
-    _CITE_KEY_PAT = r"[a-zA-Z][a-zA-Z0-9_-]*\d{4}[a-zA-Z]?"
+    # BUG-32 fix: key pattern must also match author2017keyword style keys
+    # (e.g., roijers2017multiobjective, abels2019dynamic)
+    _CITE_KEY_PAT = r"[a-zA-Z][a-zA-Z0-9_-]*\d{4}[a-zA-Z0-9_]*"
     text = re.sub(
         rf"\[({_CITE_KEY_PAT}(?:\s*,\s*{_CITE_KEY_PAT})*)\]",
         r"\\cite{\1}",
