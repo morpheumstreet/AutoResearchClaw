@@ -1,0 +1,272 @@
+openapi: 3.1.0
+info:
+  title: ResearchClaw
+  description: Autonomous Research Pipeline — Web Interface
+  version: 0.5.0
+paths:
+  /api/health:
+    get:
+      summary: Health
+      operationId: health_api_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Health Api Health Get
+  /api/config:
+    get:
+      summary: Config Summary
+      operationId: config_summary_api_config_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Config Summary Api Config Get
+  /api/pipeline/start:
+    post:
+      tags:
+      - pipeline
+      summary: Start Pipeline
+      description: Start a new pipeline run.
+      operationId: start_pipeline_api_pipeline_start_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PipelineStartRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PipelineStartResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/pipeline/stop:
+    post:
+      tags:
+      - pipeline
+      summary: Stop Pipeline
+      description: Stop the currently running pipeline.
+      operationId: stop_pipeline_api_pipeline_stop_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Stop Pipeline Api Pipeline Stop Post
+  /api/pipeline/status:
+    get:
+      tags:
+      - pipeline
+      summary: Pipeline Status
+      description: Get current pipeline run status.
+      operationId: pipeline_status_api_pipeline_status_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Pipeline Status Api Pipeline Status Get
+  /api/pipeline/stages:
+    get:
+      tags:
+      - pipeline
+      summary: Pipeline Stages
+      description: Get the 23-stage pipeline definition.
+      operationId: pipeline_stages_api_pipeline_stages_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Pipeline Stages Api Pipeline Stages Get
+  /api/runs:
+    get:
+      tags:
+      - pipeline
+      summary: List Runs
+      description: List historical pipeline runs from artifacts/ directory.
+      operationId: list_runs_api_runs_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response List Runs Api Runs Get
+  /api/runs/{run_id}:
+    get:
+      tags:
+      - pipeline
+      summary: Get Run
+      description: Get details for a specific run.
+      operationId: get_run_api_runs__run_id__get
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Run Api Runs  Run Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/runs/{run_id}/metrics:
+    get:
+      tags:
+      - pipeline
+      summary: Get Run Metrics
+      description: Get experiment metrics for a run.
+      operationId: get_run_metrics_api_runs__run_id__metrics_get
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Run Metrics Api Runs  Run Id  Metrics Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/projects:
+    get:
+      tags:
+      - projects
+      summary: List Projects
+      description: List all project directories (artifacts/rc-*).
+      operationId: list_projects_api_projects_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response List Projects Api Projects Get
+components:
+  schemas:
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    PipelineStartRequest:
+      properties:
+        topic:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Topic
+        config_overrides:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Config Overrides
+        auto_approve:
+          type: boolean
+          title: Auto Approve
+          default: true
+      type: object
+      title: PipelineStartRequest
+      description: Request body for starting a pipeline run.
+    PipelineStartResponse:
+      properties:
+        run_id:
+          type: string
+          title: Run Id
+        status:
+          type: string
+          title: Status
+        output_dir:
+          type: string
+          title: Output Dir
+      type: object
+      required:
+      - run_id
+      - status
+      - output_dir
+      title: PipelineStartResponse
+      description: Response after starting a pipeline.
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

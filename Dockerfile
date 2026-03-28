@@ -17,6 +17,12 @@
 
 FROM python:3.12-slim-bookworm AS runtime
 
+# Pip pulls build deps (e.g. hatchling) from PyPI; TLS can fail behind SSL-inspecting proxies
+# (CERTIFICATE_VERIFY_FAILED / hostname mismatch for files.pythonhosted.org). Relax verification
+# only for PyPI hosts. For strict TLS: docker build --build-arg PIP_TRUSTED_HOSTS="" .
+ARG PIP_TRUSTED_HOSTS="pypi.org files.pythonhosted.org"
+ENV PIP_TRUSTED_HOST=${PIP_TRUSTED_HOSTS}
+
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -32,7 +38,7 @@ WORKDIR /src
 
 COPY pyproject.toml README.md LICENSE prompts.default.yaml ./
 COPY researchclaw ./researchclaw
-COPY config.researchclaw.example.yaml ./config.researchclaw.example.yaml
+COPY config.researchclaw.example.yaml ./config.researchclaw.yaml
 
 # Comma-separated optional dependency groups from pyproject.toml (e.g. anthropic,pdf or all).
 ARG PIP_EXTRAS=anthropic,pdf
@@ -40,9 +46,12 @@ ARG PIP_EXTRAS=anthropic,pdf
 RUN pip install --no-cache-dir ".[${PIP_EXTRAS}]" \
     && pip install --no-cache-dir "fastapi>=0.115" "uvicorn[standard]>=0.30"
 
-# Ship example config for first-time bind-mount copy
+# Do not keep pip trusted-host settings in the final image.
+ENV PIP_TRUSTED_HOST=
+
+# Ship default config for first-time bind-mount copy (same content as example template)
 RUN install -d /opt/researchclaw \
-    && cp /src/config.researchclaw.example.yaml /opt/researchclaw/config.researchclaw.example.yaml
+    && cp /src/config.researchclaw.yaml /opt/researchclaw/config.researchclaw.yaml
 
 WORKDIR /workspace
 

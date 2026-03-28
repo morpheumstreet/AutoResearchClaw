@@ -13,6 +13,9 @@
 #   PIP_EXTRAS                Comma-separated pyproject optional extras (default: anthropic,pdf).
 #                             Use "all" for full web/crawl stack (larger image; crawl4ai may need
 #                             browser setup at runtime — see project docs).
+#   PIP_TRUSTED_HOSTS         Optional. Space-separated hosts for pip --trusted-host during build
+#                             (helps when TLS to PyPI fails behind SSL inspection). If unset, the
+#                             Dockerfile default applies. For strict verification: PIP_TRUSTED_HOSTS= bash docker-build.sh
 #   RESEARCHCLAW_DOCKERFILE   Path to Dockerfile (default: Dockerfile next to this script)
 #
 # Environment — push (--push):
@@ -52,9 +55,12 @@ fi
 
 if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
   echo "Building ${IMAGE_NAME}:${TAG} (PIP_EXTRAS=${PIP_EXTRAS})..."
+  BUILD_ARGS=( -f "${DOCKERFILE}" --build-arg "PIP_EXTRAS=${PIP_EXTRAS}" )
+  if [[ "${PIP_TRUSTED_HOSTS+x}" ]]; then
+    BUILD_ARGS+=( --build-arg "PIP_TRUSTED_HOSTS=${PIP_TRUSTED_HOSTS}" )
+  fi
   docker build \
-    -f "${DOCKERFILE}" \
-    --build-arg "PIP_EXTRAS=${PIP_EXTRAS}" \
+    "${BUILD_ARGS[@]}" \
     -t "${IMAGE_NAME}:${TAG}" \
     "${ROOT}"
   echo "OK: ${IMAGE_NAME}:${TAG}"
