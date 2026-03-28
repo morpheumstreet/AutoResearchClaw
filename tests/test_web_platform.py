@@ -34,6 +34,7 @@ class TestServerConfig:
         assert cfg.port == 8080
         assert cfg.cors_origins == ("*",)
         assert cfg.auth_token == ""
+        assert cfg.auth_token_env == ""
         assert cfg.voice_enabled is False
 
     def test_dashboard_config_defaults(self) -> None:
@@ -52,11 +53,25 @@ class TestServerConfig:
             "host": "127.0.0.1",
             "port": 9090,
             "auth_token": "secret123",
+            "auth_token_env": "RC_TEST_TOKEN",
         })
         assert cfg.enabled is True
         assert cfg.host == "127.0.0.1"
         assert cfg.port == 9090
         assert cfg.auth_token == "secret123"
+        assert cfg.auth_token_env == "RC_TEST_TOKEN"
+
+    def test_server_effective_auth_token_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from researchclaw.config import _parse_server_config
+
+        cfg = _parse_server_config({
+            "auth_token": "from-file",
+            "auth_token_env": "RESEARCHCLAW_API_KEY",
+        })
+        monkeypatch.delenv("RESEARCHCLAW_API_KEY", raising=False)
+        assert cfg.effective_auth_token() == "from-file"
+        monkeypatch.setenv("RESEARCHCLAW_API_KEY", "  from-env  ")
+        assert cfg.effective_auth_token() == "from-env"
 
     def test_parse_server_config_empty(self) -> None:
         from researchclaw.config import _parse_server_config
@@ -610,16 +625,38 @@ class TestFastAPIApp:
     async def test_health_endpoint(self, app: object) -> None:
         from httpx import AsyncClient, ASGITransport
 
+        from researchclaw import API_VERSION, __version__
+
         transport = ASGITransport(app=app)  # type: ignore[arg-type]
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.get("/api/health")
             assert resp.status_code == 200
             data = resp.json()
             assert data["status"] == "ok"
+            assert data["version"] == __version__
+            assert data["api_version"] == API_VERSION
+
+    @pytest.mark.asyncio
+    async def test_version_endpoint(self, app: object) -> None:
+        from httpx import AsyncClient, ASGITransport
+
+        from researchclaw import API_VERSION, __version__
+
+        transport = ASGITransport(app=app)  # type: ignore[arg-type]
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            resp = await ac.get("/api/version")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["package_version"] == __version__
+            assert data["api_version"] == API_VERSION
+            assert data["openapi_spec"] == "3.1.0"
+            assert "python" in data
 
     @pytest.mark.asyncio
     async def test_config_endpoint(self, app: object) -> None:
         from httpx import AsyncClient, ASGITransport
+
+        from researchclaw import API_VERSION, __version__
 
         transport = ASGITransport(app=app)  # type: ignore[arg-type]
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -627,6 +664,8 @@ class TestFastAPIApp:
             assert resp.status_code == 200
             data = resp.json()
             assert data["project"] == "test"
+            assert data["version"]["package"] == __version__
+            assert data["version"]["api"] == API_VERSION
 
     @pytest.mark.asyncio
     async def test_pipeline_status_idle(self, app: object) -> None:

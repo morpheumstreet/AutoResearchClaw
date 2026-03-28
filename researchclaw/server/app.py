@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from researchclaw import API_VERSION, __version__
 from researchclaw.config import RCConfig
 from researchclaw.server.middleware.auth import TokenAuthMiddleware
 from researchclaw.server.websocket.manager import ConnectionManager
@@ -38,7 +40,7 @@ def create_app(
     app = FastAPI(
         title="ResearchClaw",
         description="Autonomous Research Pipeline — Web Interface",
-        version="0.5.0",
+        version=__version__,
     )
 
     # Store config in shared state
@@ -55,8 +57,9 @@ def create_app(
     )
 
     # --- Token auth ---
-    if config.server.auth_token:
-        app.add_middleware(TokenAuthMiddleware, token=config.server.auth_token)
+    _api_token = config.server.effective_auth_token()
+    if _api_token:
+        app.add_middleware(TokenAuthMiddleware, token=_api_token)
 
     # --- WebSocket manager ---
     event_manager = ConnectionManager()
@@ -67,8 +70,20 @@ def create_app(
     async def health() -> dict[str, Any]:
         return {
             "status": "ok",
-            "version": "0.5.0",
+            "version": __version__,
+            "api_version": API_VERSION,
             "active_connections": event_manager.active_count,
+        }
+
+    @app.get("/api/version")
+    async def version_info() -> dict[str, Any]:
+        """Package, HTTP API contract, runtime, and OpenAPI spec metadata."""
+        v = sys.version_info
+        return {
+            "package_version": __version__,
+            "api_version": API_VERSION,
+            "python": f"{v.major}.{v.minor}.{v.micro}",
+            "openapi_spec": "3.1.0",
         }
 
     @app.get("/api/config")
@@ -77,6 +92,10 @@ def create_app(
             "project": config.project.name,
             "topic": config.research.topic,
             "mode": config.experiment.mode,
+            "version": {
+                "package": __version__,
+                "api": API_VERSION,
+            },
             "server": {
                 "voice_enabled": config.server.voice_enabled,
                 "dashboard_enabled": config.dashboard.enabled,

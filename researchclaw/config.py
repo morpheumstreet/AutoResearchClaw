@@ -575,9 +575,26 @@ class ServerConfig:
     port: int = 8080
     cors_origins: tuple[str, ...] = ("*",)
     auth_token: str = ""  # empty = no authentication
+    # If set, os.environ[auth_token_env] overrides auth_token when non-empty (deployment override).
+    auth_token_env: str = ""
     voice_enabled: bool = False
     whisper_model: str = "whisper-1"
     whisper_api_url: str = ""  # empty = use OpenAI default
+
+    def effective_auth_token(self) -> str:
+        """Bearer token for the HTTP API when auth is enabled.
+
+        When ``auth_token_env`` names an environment variable and that variable
+        is set to a non-empty string, that value wins over ``auth_token`` from
+        the config file.
+        """
+        import os
+
+        if self.auth_token_env:
+            env_val = (os.environ.get(self.auth_token_env) or "").strip()
+            if env_val:
+                return env_val
+        return self.auth_token
 
 
 @dataclass(frozen=True)
@@ -1353,7 +1370,8 @@ def _parse_server_config(data: dict[str, Any]) -> ServerConfig:
         host=data.get("host", "0.0.0.0"),
         port=int(data.get("port", 8080)),
         cors_origins=cors,
-        auth_token=data.get("auth_token", ""),
+        auth_token=str(data.get("auth_token", "") or ""),
+        auth_token_env=str(data.get("auth_token_env", "") or ""),
         voice_enabled=bool(data.get("voice_enabled", False)),
         whisper_model=data.get("whisper_model", "whisper-1"),
         whisper_api_url=data.get("whisper_api_url", ""),

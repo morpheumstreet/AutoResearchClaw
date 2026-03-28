@@ -56,6 +56,15 @@ security:
   allow_publish_without_approval: false
   redact_sensitive_logs: true
 
+# === Web server (`researchclaw serve`) ===
+# When auth_token is non-empty (or auth_token_env points to a non-empty env var), clients must send:
+#   Authorization: Bearer <token>   (HTTP)   |   ?token=<token>   (WebSockets)
+# Exempt: /api/health, /docs, /openapi.json, /static/*
+server:
+  auth_token: ""
+  # Optional: env var overrides auth_token when set and non-empty (e.g. RESEARCHCLAW_API_KEY in production).
+  auth_token_env: ""
+
 # Web search / page crawl (Stage 4 literature augmentation)
 # Install spider CLI: https://github.com/spider-rs/spider/tree/main/spider_cli  (cargo install spider_cli)
 # web_search:

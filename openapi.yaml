@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: ResearchClaw
   description: Autonomous Research Pipeline — Web Interface
-  version: 0.5.0
+  version: 0.3.2
 paths:
   /api/health:
     get:
@@ -17,6 +17,20 @@ paths:
                 additionalProperties: true
                 type: object
                 title: Response Health Api Health Get
+  /api/version:
+    get:
+      summary: Version Info
+      description: Package, HTTP API contract, runtime, and OpenAPI spec metadata.
+      operationId: version_info_api_version_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Version Info Api Version Get
   /api/config:
     get:
       summary: Config Summary
