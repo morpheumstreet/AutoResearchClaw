@@ -477,6 +477,17 @@ class MetaClawBridgeConfig:
     )
 
 
+CRAWL_BACKENDS = ("crawl4ai", "spider_cli", "urllib")
+
+
+def _normalize_crawl_backend(raw: str) -> str:
+    """Return a valid crawl backend name (default: crawl4ai)."""
+    s = str(raw or "").strip().lower()
+    if s in CRAWL_BACKENDS:
+        return s
+    return "crawl4ai"
+
+
 @dataclass(frozen=True)
 class WebSearchConfig:
     """Configuration for web search and crawling capabilities."""
@@ -490,6 +501,11 @@ class WebSearchConfig:
     max_web_results: int = 10
     max_scholar_results: int = 10
     max_crawl_urls: int = 5
+    # Page crawl engine: crawl4ai (default), spider_cli (spider-rs spider CLI), or urllib
+    crawl_backend: str = "crawl4ai"
+    spider_cli_path: str = "spider"
+    spider_cli_http_only: bool = True
+    spider_cli_headless: bool = False
 
 
 @dataclass(frozen=True)
@@ -838,6 +854,16 @@ class RCConfig:
                 max_web_results=int(web_search.get("max_web_results", 10)),
                 max_scholar_results=int(web_search.get("max_scholar_results", 10)),
                 max_crawl_urls=int(web_search.get("max_crawl_urls", 5)),
+                crawl_backend=_normalize_crawl_backend(
+                    str(web_search.get("crawl_backend", "crawl4ai"))
+                ),
+                spider_cli_path=str(web_search.get("spider_cli_path", "spider")),
+                spider_cli_http_only=bool(
+                    web_search.get("spider_cli_http_only", True)
+                ),
+                spider_cli_headless=bool(
+                    web_search.get("spider_cli_headless", False)
+                ),
             ),
             metaclaw_bridge=_parse_metaclaw_bridge_config(metaclaw),
             memory=_parse_memory_config(memory_data),
@@ -937,6 +963,13 @@ def validate_config(
         and cli_agent_provider not in CLI_AGENT_PROVIDERS
     ):
         errors.append(f"Invalid experiment.cli_agent.provider: {cli_agent_provider}")
+
+    crawl_backend = _get_by_path(data, "web_search.crawl_backend")
+    if not _is_blank(crawl_backend) and str(crawl_backend).strip().lower() not in CRAWL_BACKENDS:
+        errors.append(
+            f"Invalid web_search.crawl_backend: {crawl_backend} "
+            f"(expected one of: {', '.join(CRAWL_BACKENDS)})"
+        )
 
     kb_root_raw = _get_by_path(data, "knowledge_base.root")
     if check_paths and not _is_blank(kb_root_raw) and project_root is not None:

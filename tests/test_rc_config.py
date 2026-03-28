@@ -112,6 +112,15 @@ def test_validate_config_with_valid_data_returns_ok_true(tmp_path: Path):
     assert result.errors == ()
 
 
+def test_validate_config_invalid_web_search_crawl_backend(tmp_path: Path):
+    data = _valid_config_data()
+    data["web_search"] = {"crawl_backend": "not-a-backend"}
+
+    result = validate_config(data, project_root=tmp_path, check_paths=False)
+    assert result.ok is False
+    assert any("crawl_backend" in e for e in result.errors)
+
+
 def test_validate_config_missing_required_fields_returns_errors(tmp_path: Path):
     data = _valid_config_data()
     data["research"] = {}

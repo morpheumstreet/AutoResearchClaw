@@ -56,6 +56,15 @@ security:
   allow_publish_without_approval: false
   redact_sensitive_logs: true
 
+# Web search / page crawl (Stage 4 literature augmentation)
+# Install spider CLI: https://github.com/spider-rs/spider/tree/main/spider_cli  (cargo install spider_cli)
+# web_search:
+#   enabled: true
+#   crawl_backend: "crawl4ai"   # crawl4ai | spider_cli | urllib
+#   spider_cli_path: "spider"
+#   spider_cli_http_only: true  # use spider --http (no headless Chrome)
+#   spider_cli_headless: false    # set true for --headless when http_only is false
+
 experiment:
   # ★ mode 决定实验结果的真实性
   #   "sandbox"   — 在本地沙盒中实际执行生成的 Python 代码，产出真实实验数据

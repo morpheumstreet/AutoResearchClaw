@@ -1,7 +1,8 @@
 """Unified Web Search Agent.
 
-Orchestrates all web capabilities (Tavily, Google Scholar, Crawl4AI,
-PDF extraction) into a single search-and-extract pipeline.
+Orchestrates all web capabilities (Tavily, Google Scholar, page crawling
+via Crawl4AI / spider_cli / urllib, PDF extraction) into a single
+search-and-extract pipeline.
 
 Usage::
 
@@ -150,6 +151,14 @@ class WebSearchAgent:
         Maximum Google Scholar results.
     max_crawl_urls:
         Maximum URLs to crawl for full content.
+    crawl_backend:
+        ``crawl4ai`` (default), ``spider_cli``, or ``urllib`` — see ``WebCrawler``.
+    spider_cli_path:
+        Executable for `spider` when ``crawl_backend`` is ``spider_cli``.
+    spider_cli_http_only:
+        Pass ``--http`` to spider (no headless Chrome).
+    spider_cli_headless:
+        Pass ``--headless`` when not using HTTP-only spider mode.
     """
 
     def __init__(
@@ -162,13 +171,22 @@ class WebSearchAgent:
         max_web_results: int = 10,
         max_scholar_results: int = 10,
         max_crawl_urls: int = 5,
+        crawl_backend: str = "crawl4ai",
+        spider_cli_path: str = "spider",
+        spider_cli_http_only: bool = True,
+        spider_cli_headless: bool = False,
     ) -> None:
         self.web_client = WebSearchClient(api_key=tavily_api_key)
         try:
             self.scholar_client = GoogleScholarClient()
         except ImportError:
             self.scholar_client = None  # type: ignore[assignment]
-        self.crawler = WebCrawler()
+        self.crawler = WebCrawler(
+            backend=crawl_backend,
+            spider_cli_path=spider_cli_path,
+            spider_cli_http_only=spider_cli_http_only,
+            spider_cli_headless=spider_cli_headless,
+        )
         self.pdf_extractor = PDFExtractor()
         self.enable_scholar = enable_scholar
         self.enable_crawling = enable_crawling

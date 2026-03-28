@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from researchclaw.web.crawler import CrawlResult, WebCrawler
+from researchclaw.web.crawler import (
+    CRAWL_BACKEND_SPIDER_CLI,
+    CrawlResult,
+    WebCrawler,
+)
 from researchclaw.web import check_url_ssrf
 
 
@@ -117,6 +122,53 @@ class TestCrawlUrllibFallback:
 # ---------------------------------------------------------------------------
 # Sync crawl (goes through crawl4ai → urllib fallback chain)
 # ---------------------------------------------------------------------------
+
+
+class TestSpiderCliBackend:
+    @patch("researchclaw.web.crawler.subprocess.run")
+    @patch("researchclaw.web.crawler.urlopen")
+    def test_spider_cli_success(self, mock_urlopen, mock_run):
+        long_md = "# Page\n\n" + ("x" * 120)
+        line = json.dumps({"markdown": long_md, "title": "Example"})
+        mock_run.return_value = MagicMock(returncode=0, stdout=line + "\n", stderr="")
+
+        crawler = WebCrawler(backend=CRAWL_BACKEND_SPIDER_CLI)
+        result = crawler.crawl_sync("https://example.com/page")
+        assert result.success
+        assert result.title == "Example"
+        assert "Page" in result.markdown
+        mock_run.assert_called_once()
+        args = mock_run.call_args[0][0]
+        assert args[0] == "spider"
+        assert "--return-format" in args
+        assert "markdown" in args
+        assert "scrape" in args
+        assert "--http" in args
+        mock_urlopen.assert_not_called()
+
+    @patch("researchclaw.web.crawler.subprocess.run")
+    @patch("researchclaw.web.crawler.urlopen")
+    def test_spider_cli_falls_back_to_urllib(self, mock_urlopen, mock_run):
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="boom")
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = (
+            b"<html><title>Fb</title><body><p>" + b"x" * 120 + b"</p></body></html>"
+        )
+        mock_resp.headers = {"Content-Type": "text/html"}
+        mock_urlopen.return_value = mock_resp
+
+        crawler = WebCrawler(backend=CRAWL_BACKEND_SPIDER_CLI)
+        result = crawler.crawl_sync("https://example.com/page")
+        assert result.success
+        assert mock_urlopen.called
+
+    def test_parse_spider_scrape_output_html_fallback(self):
+        crawler = WebCrawler()
+        html = "<html><title>T</title><body><p>" + "y" * 120 + "</p></body></html>"
+        line = json.dumps({"html": html})
+        md, title = crawler._parse_spider_scrape_output(line)
+        assert len(md) > 50
+        assert "y" * 10 in md
 
 
 class TestCrawlSync:

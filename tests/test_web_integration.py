@@ -216,6 +216,8 @@ class TestWebSearchConfig:
         assert cfg.enabled is True
         assert cfg.max_web_results == 10
         assert cfg.enable_scholar is True
+        assert cfg.crawl_backend == "crawl4ai"
+        assert cfg.spider_cli_path == "spider"
 
     def test_config_in_rcconfig(self):
         from researchclaw.config import RCConfig

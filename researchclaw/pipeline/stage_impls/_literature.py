@@ -440,6 +440,10 @@ def _execute_literature_collect(
                 max_web_results=config.web_search.max_web_results,
                 max_scholar_results=config.web_search.max_scholar_results,
                 max_crawl_urls=config.web_search.max_crawl_urls,
+                crawl_backend=config.web_search.crawl_backend,
+                spider_cli_path=config.web_search.spider_cli_path,
+                spider_cli_http_only=config.web_search.spider_cli_http_only,
+                spider_cli_headless=config.web_search.spider_cli_headless,
             )
             web_result = web_agent.search_and_extract(
                 topic, search_queries=queries,
