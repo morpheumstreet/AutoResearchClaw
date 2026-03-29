@@ -1,23 +1,32 @@
 """Knowledge base integration for ARC pipeline.
 
-Supports two backends:
-- ``markdown`` (default): Plain Markdown files in ``docs/kb/``
+Supports backends:
+- ``markdown`` (default): Plain Markdown files under ``knowledge_base.root``
 - ``obsidian``: Markdown with Obsidian-compatible wikilinks, tags, and frontmatter
+  on the local filesystem
+- ``obsidian_rest``: Same note shape as ``obsidian``, but writes via the
+  `Obsidian Local REST API <https://github.com/coddingtonbear/obsidian-local-rest-api>`_
+  (HTTPS default port 27124). ``knowledge_base.root`` is the vault-relative
+  folder prefix for KB files (e.g. ``ResearchClaw/kb``).
 
-Both backends produce files that are valid Markdown and can be browsed
-without any special tooling — the Obsidian backend simply adds extra
-metadata that Obsidian can consume.
+With ``knowledge_base.topic_prefix: auto`` (default), entries are stored under
+``{root}/{domain-slugs}__{topic-slug}/{category}/…`` using ``research.domains``
+and ``research.topic`` so each major topic has its own subtree.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from researchclaw.knowledge.obsidian_rest import ObsidianRestSettings, put_vault_markdown
 
 
 def _utcnow_iso() -> str:
@@ -83,33 +92,106 @@ def _obsidian_enhancements(entry: KBEntry) -> str:
     return "\n".join(extras)
 
 
+def _slug_segment(s: str, max_len: int = 64) -> str:
+    """Lowercase path segment: letters, digits, hyphen; empty input → stable hash."""
+    t = s.lower().strip()
+    t = re.sub(r"[^\w\s-]+", "", t, flags=re.UNICODE)
+    t = re.sub(r"[-\s]+", "-", t).strip("-")
+    if not t:
+        h = hashlib.sha256(s.encode("utf-8")).hexdigest()[:12]
+        return f"topic-{h}"
+    return t[:max_len]
+
+
+def slug_kb_topic_with_domains(topic: str, domains: tuple[str, ...]) -> str:
+    """Build a single folder name: ``{domain}-{domain}__{topic}`` or topic only."""
+    dom_parts = [_slug_segment(str(d), 48) for d in domains if str(d).strip()]
+    dom_parts = [p for p in dom_parts if p]
+    topic_part = _slug_segment(topic, 96)
+    if dom_parts:
+        domain_join = "-".join(dom_parts)[:80]
+        return f"{domain_join}__{topic_part}"
+    return topic_part
+
+
+def kb_topic_path_segment(
+    topic: str,
+    domains: tuple[str, ...],
+    *,
+    topic_prefix_mode: str,
+) -> str | None:
+    """Return extra path segment under ``knowledge_base.root``, or ``None``."""
+    if topic_prefix_mode != "auto":
+        return None
+    t = (topic or "").strip()
+    if not t:
+        return None
+    return slug_kb_topic_with_domains(t, domains)
+
+
+def effective_kb_root(
+    kb_root: Path,
+    topic: str,
+    domains: tuple[str, ...],
+    *,
+    topic_prefix_mode: str,
+) -> Path:
+    """``kb_root`` optionally extended with domain/topic slug (see ``topic_prefix``)."""
+    seg = kb_topic_path_segment(topic, domains, topic_prefix_mode=topic_prefix_mode)
+    if seg is None:
+        return kb_root
+    return kb_root / seg
+
+
+def _kb_vault_relative(kb_root: Path, category: str, filename: str) -> str:
+    prefix = kb_root.as_posix().strip("/")
+    if prefix:
+        return f"{prefix}/{category}/{filename}"
+    return f"{category}/{filename}"
+
+
 def write_kb_entry(
     kb_root: Path,
     entry: KBEntry,
     *,
     backend: str = "markdown",
+    obsidian_rest: ObsidianRestSettings | None = None,
 ) -> Path:
     """Write a single KB entry to the appropriate category directory.
 
-    Returns the path to the written file.
-    """
-    category_dir = kb_root / entry.category
-    category_dir.mkdir(parents=True, exist_ok=True)
+    For ``obsidian_rest``, *kb_root* is a vault-relative path prefix only;
+    the note is sent with ``PUT /vault/...`` and the returned :class:`~pathlib.Path`
+    is the logical location for logging.
 
+    Returns the path to the written file (or logical path for REST).
+    """
     # Build content
     parts: list[str] = []
     parts.append(_markdown_frontmatter(entry))
     parts.append(f"# {entry.title}\n")
     parts.append(entry.content)
 
-    if backend == "obsidian":
+    if backend in ("obsidian", "obsidian_rest"):
         obs = _obsidian_enhancements(entry)
         if obs:
             parts.append(obs)
 
     filename = f"{entry.entry_id}.md"
+    body = "\n".join(parts)
+
+    if backend == "obsidian_rest":
+        if obsidian_rest is None:
+            raise ValueError(
+                "obsidian_rest backend requires obsidian_rest settings (API URL and key)"
+            )
+        vault_rel = _kb_vault_relative(kb_root, entry.category, filename)
+        put_vault_markdown(obsidian_rest, vault_rel, body)
+        return kb_root / entry.category / filename
+
+    category_dir = kb_root / entry.category
+    category_dir.mkdir(parents=True, exist_ok=True)
     filepath = category_dir / filename
-    filepath.write_text("\n".join(parts), encoding="utf-8")
+    filepath.write_text(body, encoding="utf-8")
     return filepath
 
 
@@ -153,6 +235,9 @@ def write_stage_to_kb(
     *,
     backend: str = "markdown",
     topic: str = "",
+    domains: tuple[str, ...] = (),
+    topic_prefix_mode: str = "auto",
+    obsidian_rest: ObsidianRestSettings | None = None,
 ) -> list[Path]:
     """Write stage results to the knowledge base.
 
@@ -197,10 +282,18 @@ def write_stage_to_kb(
         run_id=run_id,
         evidence_refs=evidence,
         tags=[stage_name, f"stage-{stage_id:02d}", f"run-{run_id[:8]}"],
-        links=[f"run-{run_id}"] if backend == "obsidian" else None,
+        links=[f"run-{run_id}"] if backend in ("obsidian", "obsidian_rest") else None,
     )
 
-    path = write_kb_entry(kb_root, entry, backend=backend)
+    root = effective_kb_root(
+        kb_root,
+        topic,
+        domains,
+        topic_prefix_mode=topic_prefix_mode,
+    )
+    path = write_kb_entry(
+        root, entry, backend=backend, obsidian_rest=obsidian_rest
+    )
     written.append(path)
     return written
 
@@ -216,11 +309,17 @@ def generate_weekly_report(
     *,
     backend: str = "markdown",
     week_label: str = "",
+    obsidian_rest: ObsidianRestSettings | None = None,
+    research_topic: str = "",
+    research_domains: tuple[str, ...] = (),
+    topic_prefix_mode: str = "auto",
 ) -> Path:
     """Generate a weekly summary report from completed pipeline runs.
 
     Scans ``run_dirs`` for ``pipeline_summary.json`` files and aggregates
-    statistics into a Markdown report written to ``kb_root/reviews/``.
+    statistics into a Markdown report written to ``kb_root/reviews/`` (or under
+    the same topic prefix as stage KB when *research_topic* is set and
+    *topic_prefix_mode* is ``auto``).
     """
     if not week_label:
         week_label = datetime.now(timezone.utc).strftime("%Y-W%W")
@@ -279,4 +378,12 @@ def generate_weekly_report(
         run_id=week_label,
         tags=["weekly-report", week_label],
     )
-    return write_kb_entry(kb_root, entry, backend=backend)
+    root = effective_kb_root(
+        kb_root,
+        research_topic,
+        research_domains,
+        topic_prefix_mode=topic_prefix_mode,
+    )
+    return write_kb_entry(
+        root, entry, backend=backend, obsidian_rest=obsidian_rest
+    )

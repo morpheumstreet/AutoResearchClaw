@@ -510,6 +510,8 @@ class TestOpenCodeConfig:
         assert cfg.auto is True
         assert cfg.complexity_threshold == 0.2
         assert cfg.model == ""
+        assert cfg.base_url == ""
+        assert cfg.api_key_env == ""
         assert cfg.timeout_sec == 600
         assert cfg.max_retries == 1
         assert cfg.workspace_cleanup is True
@@ -520,6 +522,8 @@ class TestOpenCodeConfig:
             "auto": True,
             "complexity_threshold": 0.5,
             "model": "gpt-5.2",
+            "base_url": "https://coding.example/v1",
+            "api_key_env": "CODING_OPENAI_API_KEY",
             "timeout_sec": 900,
             "max_retries": 2,
             "workspace_cleanup": False,
@@ -529,6 +533,8 @@ class TestOpenCodeConfig:
         assert cfg.auto is True
         assert cfg.complexity_threshold == 0.5
         assert cfg.model == "gpt-5.2"
+        assert cfg.base_url == "https://coding.example/v1"
+        assert cfg.api_key_env == "CODING_OPENAI_API_KEY"
         assert cfg.timeout_sec == 900
         assert cfg.max_retries == 2
         assert cfg.workspace_cleanup is False

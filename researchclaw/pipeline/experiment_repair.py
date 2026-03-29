@@ -650,10 +650,16 @@ def _repair_via_opencode(
         from researchclaw.pipeline.opencode_bridge import OpenCodeBridge
 
         _oc_cfg = config.experiment.opencode
+        _oc_base = (getattr(_oc_cfg, "base_url", "") or "").strip() or (
+            getattr(config.llm, "base_url", "") or ""
+        )
+        _oc_key_env = (getattr(_oc_cfg, "api_key_env", "") or "").strip() or (
+            getattr(config.llm, "api_key_env", "") or ""
+        )
         bridge = OpenCodeBridge(
             model=getattr(_oc_cfg, "model", "") or "",
-            llm_base_url=getattr(config.llm, "base_url", "") or "",
-            api_key_env=getattr(config.llm, "api_key_env", "") or "",
+            llm_base_url=_oc_base,
+            api_key_env=_oc_key_env,
             llm_provider=getattr(config.llm, "provider", "openai-compatible") or "openai-compatible",
             timeout_sec=getattr(_oc_cfg, "timeout_sec", 600),
             max_retries=getattr(_oc_cfg, "max_retries", 1),

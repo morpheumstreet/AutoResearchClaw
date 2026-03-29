@@ -10,7 +10,9 @@ from researchclaw.knowledge.base import (
     KBEntry,
     _markdown_frontmatter,
     _obsidian_enhancements,
+    effective_kb_root,
     generate_weekly_report,
+    slug_kb_topic_with_domains,
     write_kb_entry,
     write_stage_to_kb,
 )
@@ -149,6 +151,68 @@ def test_kb_category_map_values_are_valid_categories():
     assert set(KB_CATEGORY_MAP.values()).issubset(valid)
 
 
+def test_slug_kb_topic_with_domains_joins_domain_and_topic() -> None:
+    s = slug_kb_topic_with_domains(
+        "Attention for Vision", ("machine-learning", "computer-vision")
+    )
+    assert s == "machine-learning-computer-vision__attention-for-vision"
+
+
+def test_slug_kb_topic_with_domains_topic_only() -> None:
+    assert slug_kb_topic_with_domains("Sparse Autoencoders", ()) == "sparse-autoencoders"
+
+
+def test_write_stage_to_kb_topic_prefix_auto_nests_under_domain_topic(tmp_path: Path):
+    kb_root = _kb_root(tmp_path)
+    stage_dir = tmp_path / "stage-04"
+    stage_dir.mkdir()
+    (stage_dir / "lit.md").write_text("x", encoding="utf-8")
+    path = write_stage_to_kb(
+        kb_root,
+        4,
+        "literature_search",
+        "run-xyz",
+        ["lit.md"],
+        stage_dir,
+        topic="Neural Scaling Laws",
+        domains=("ml",),
+        topic_prefix_mode="auto",
+    )[0]
+    assert path.parent.name == "literature"
+    assert path.parent.parent.name == "ml__neural-scaling-laws"
+
+
+def test_write_stage_to_kb_topic_prefix_none_stays_flat(tmp_path: Path):
+    kb_root = _kb_root(tmp_path)
+    stage_dir = tmp_path / "stage-04"
+    stage_dir.mkdir()
+    (stage_dir / "lit.md").write_text("x", encoding="utf-8")
+    path = write_stage_to_kb(
+        kb_root,
+        4,
+        "literature_search",
+        "run-xyz",
+        ["lit.md"],
+        stage_dir,
+        topic="Neural Scaling Laws",
+        domains=("ml",),
+        topic_prefix_mode="none",
+    )[0]
+    assert path.parent.name == "literature"
+    assert path.parent.parent == kb_root
+
+
+def test_effective_kb_root_matches_write_stage_layout(tmp_path: Path) -> None:
+    kb = _kb_root(tmp_path)
+    eff = effective_kb_root(
+        kb,
+        "Topic A",
+        ("dom",),
+        topic_prefix_mode="auto",
+    )
+    assert eff == kb / "dom__topic-a"
+
+
 def test_write_stage_to_kb_places_entry_in_mapped_category(tmp_path: Path):
     kb_root = _kb_root(tmp_path)
     stage_dir = tmp_path / "stage-10"
@@ -225,6 +289,27 @@ def test_generate_weekly_report_creates_file_in_reviews_category(tmp_path: Path)
     path = generate_weekly_report(kb_root, [run_dir], week_label="2026-W10")
     assert path.parent.name == "reviews"
     assert path.name == "weekly-report-2026-W10.md"
+
+
+def test_generate_weekly_report_respects_topic_prefix(tmp_path: Path):
+    kb_root = _kb_root(tmp_path)
+    run_dir = tmp_path / "run-a"
+    run_dir.mkdir()
+    (run_dir / "pipeline_summary.json").write_text(
+        json.dumps({"run_id": "run-a", "stages_executed": 1, "stages_done": 1}),
+        encoding="utf-8",
+    )
+    path = generate_weekly_report(
+        kb_root,
+        [run_dir],
+        week_label="2026-W20",
+        research_topic="Weekly Topic",
+        research_domains=("reviews",),
+        topic_prefix_mode="auto",
+    )
+    assert path.parent.name == "reviews"
+    assert path.parent.parent.name == "reviews__weekly-topic"
+    assert path.name == "weekly-report-2026-W20.md"
 
 
 def test_generate_weekly_report_with_empty_run_dirs(tmp_path: Path):

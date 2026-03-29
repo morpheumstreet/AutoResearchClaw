@@ -242,7 +242,8 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     if config.knowledge_base.root:
         kb_root_path = Path(config.knowledge_base.root)
-        kb_root_path.mkdir(parents=True, exist_ok=True)
+        if config.knowledge_base.backend != "obsidian_rest":
+            kb_root_path.mkdir(parents=True, exist_ok=True)
 
     adapters = AdapterBundle()
 

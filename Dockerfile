@@ -10,10 +10,12 @@
 # Build and push (set DOCKER_SPACE_SORA + DOCKER_TOKEN_SORA):
 #   bash docker-build.sh --push
 #
-# Run (mount your config and artifacts directory):
-#   docker run --rm -v "$PWD/config.yaml:/workspace/config.yaml:ro" \
+# Run — mount a config *directory* (not a missing config.yaml file, or Docker may create a folder):
+#   mkdir -p config && cp config.researchclaw.example.yaml config/config.yaml
+#   docker run --rm \
+#     -v "$PWD/config:/workspace/user-config" \
 #     -v "$PWD/artifacts:/workspace/artifacts" -w /workspace \
-#     researchclaw:latest run --config config.yaml --topic "..." --auto-approve
+#     researchclaw:latest run --config /workspace/user-config/config.yaml --topic "..." --auto-approve
 
 FROM python:3.12-slim-bookworm AS runtime
 
@@ -29,9 +31,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+        bash \
         build-essential \
-        git \
         ca-certificates \
+        coreutils \
+        git \
+        gosu \
+        nano \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -55,14 +61,17 @@ RUN install -d /opt/researchclaw \
 
 WORKDIR /workspace
 
-RUN useradd --create-home --uid 1000 --shell /bin/bash researcher \
-    && chown researcher:researcher /workspace
+# UID/GID 1000 — entrypoint chowns bind mounts then drops to this user (see docker-entrypoint.sh).
+RUN groupadd -g 1000 researcher \
+    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash researcher \
+    && chown -R 1000:1000 /workspace /opt/researchclaw
 
-USER researcher
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod 755 /docker-entrypoint.sh
 
 ENV PATH="/usr/local/bin:${PATH}"
 
 EXPOSE 8080
 
-ENTRYPOINT ["researchclaw"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["--help"]

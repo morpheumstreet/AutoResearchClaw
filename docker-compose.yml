@@ -1,0 +1,24 @@
+# Mount a directory (not a single file) so Docker never turns config.yaml into a directory.
+# Before first run: cp config.researchclaw.example.yaml config/config.yaml
+# Image entrypoint chowns /workspace to 1000:1000. Config is mounted rw (not :ro) so ownership
+# matches artifacts; ResearchClaw only reads config at startup for normal serve usage.
+services:
+  researchclaw:
+    image: sorajez/autoresearchdepartment:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/workspace/user-config
+      - ./artifacts:/workspace/artifacts
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      RESEARCHCLAW_API_KEY: ${RESEARCHCLAW_API_KEY:-}
+    command:
+      - serve
+      - --config
+      - /workspace/user-config/config.yaml
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8080"

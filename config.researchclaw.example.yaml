@@ -25,6 +25,15 @@ notifications:
 knowledge_base:
   backend: "markdown"
   root: "docs/kb"
+  # auto (default): nest KB files under …/root/{domains}__{topic-slug}/… from research.domains + research.topic
+  # none: keep a flat layout directly under root (legacy)
+  topic_prefix: "auto"
+  # Optional: write KB notes via Obsidian Local REST API instead of local folders:
+  # backend: "obsidian_rest"
+  # root: "ResearchClaw/kb"   # vault-relative path prefix (folders created in the vault by the API)
+  # obsidian_rest_base_url: "https://127.0.0.1:27124"
+  # obsidian_rest_api_key_env: "OBSIDIAN_LOCAL_REST_API_KEY"
+  # obsidian_rest_verify_ssl: false   # set false if using the plugin's self-signed HTTPS cert
 
 openclaw_bridge:
   use_cron: false
@@ -123,6 +132,9 @@ experiment:
     auto: true                   # Auto-trigger without confirmation (default: true)
     complexity_threshold: 0.2    # 0.0-1.0 — higher = only trigger on complex experiments
     model: ""                    # Override model (empty = use llm.primary_model)
+    # Optional: separate OpenAI-compatible API for OpenCode only (empty = use llm.base_url / api_key_env)
+    # base_url: "https://your-coding-endpoint.example/v1"
+    # api_key_env: "CODING_OPENAI_API_KEY"
     timeout_sec: 600             # Max seconds for OpenCode generation
     max_retries: 1               # Retry count on failure
     workspace_cleanup: true      # Remove temp workspace after collection

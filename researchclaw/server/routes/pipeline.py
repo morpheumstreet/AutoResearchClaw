@@ -96,7 +96,7 @@ async def start_pipeline(req: PipelineStartRequest) -> PipelineStartResponse:
             from researchclaw.pipeline.runner import execute_pipeline
 
             kb_root = Path(config.knowledge_base.root) if config.knowledge_base.root else None
-            if kb_root:
+            if kb_root and config.knowledge_base.backend != "obsidian_rest":
                 kb_root.mkdir(parents=True, exist_ok=True)
 
             loop = asyncio.get_event_loop()

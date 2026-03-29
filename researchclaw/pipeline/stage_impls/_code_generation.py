@@ -382,10 +382,12 @@ def _execute_code_generation(
 
             if _proceed:
                 _oc_model = _oc_cfg.model or config.llm.primary_model
+                _oc_base = (getattr(_oc_cfg, "base_url", "") or "").strip() or config.llm.base_url
+                _oc_key_env = (getattr(_oc_cfg, "api_key_env", "") or "").strip() or config.llm.api_key_env
                 _bridge = OpenCodeBridge(
                     model=_oc_model,
-                    llm_base_url=config.llm.base_url,
-                    api_key_env=config.llm.api_key_env,
+                    llm_base_url=_oc_base,
+                    api_key_env=_oc_key_env,
                     llm_provider=config.llm.provider,
                     timeout_sec=_oc_cfg.timeout_sec,
                     max_retries=_oc_cfg.max_retries,

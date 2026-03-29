@@ -94,7 +94,8 @@ KB_SUBDIRS = (
     "reviews",
 )
 PROJECT_MODES = {"docs-first", "semi-auto", "full-auto"}
-KB_BACKENDS = {"markdown", "obsidian"}
+KB_BACKENDS = {"markdown", "obsidian", "obsidian_rest"}
+KB_TOPIC_PREFIX_MODES = {"auto", "none"}
 EXPERIMENT_MODES = {
     "simulated",
     "sandbox",
@@ -163,6 +164,12 @@ class KnowledgeBaseConfig:
     backend: str
     root: str
     obsidian_vault: str = ""
+    # Obsidian Local REST API (https://github.com/coddingtonbear/obsidian-local-rest-api)
+    obsidian_rest_base_url: str = ""
+    obsidian_rest_api_key_env: str = ""
+    obsidian_rest_verify_ssl: bool = True
+    # auto: …/root/{domain-slugs}__{topic-slug}/category/… ; none: flat under root
+    topic_prefix: str = "auto"
 
 
 @dataclass(frozen=True)
@@ -325,6 +332,9 @@ class OpenCodeConfig:
     auto: bool = True  # Auto-trigger without user confirmation
     complexity_threshold: float = 0.2  # 0.0-1.0
     model: str = ""  # Empty = use llm.primary_model
+    # OpenAI-compatible API for OpenCode only (empty = use llm.base_url / llm.api_key_env).
+    base_url: str = ""
+    api_key_env: str = ""
     timeout_sec: int = 600  # Max seconds for opencode run
     max_retries: int = 1
     workspace_cleanup: bool = True
@@ -829,6 +839,18 @@ class RCConfig:
                 backend=knowledge_base.get("backend", "markdown"),
                 root=knowledge_base["root"],
                 obsidian_vault=knowledge_base.get("obsidian_vault", ""),
+                obsidian_rest_base_url=knowledge_base.get(
+                    "obsidian_rest_base_url", ""
+                ),
+                obsidian_rest_api_key_env=knowledge_base.get(
+                    "obsidian_rest_api_key_env", ""
+                ),
+                obsidian_rest_verify_ssl=bool(
+                    knowledge_base.get("obsidian_rest_verify_ssl", True)
+                ),
+                topic_prefix=str(
+                    knowledge_base.get("topic_prefix", "auto") or "auto"
+                ).strip().lower(),
             ),
             openclaw_bridge=OpenClawBridgeConfig(
                 use_cron=bool(bridge.get("use_cron", False)),
@@ -948,6 +970,29 @@ def validate_config(
     if not _is_blank(kb_backend) and kb_backend not in KB_BACKENDS:
         errors.append(f"Invalid knowledge_base.backend: {kb_backend}")
 
+    if kb_backend == "obsidian_rest":
+        rest_url = _get_by_path(data, "knowledge_base.obsidian_rest_base_url")
+        rest_env = _get_by_path(data, "knowledge_base.obsidian_rest_api_key_env")
+        if _is_blank(rest_url):
+            errors.append(
+                "knowledge_base.obsidian_rest_base_url is required when "
+                "backend is obsidian_rest"
+            )
+        if _is_blank(rest_env):
+            errors.append(
+                "knowledge_base.obsidian_rest_api_key_env is required when "
+                "backend is obsidian_rest"
+            )
+
+    kb_topic_prefix = _get_by_path(data, "knowledge_base.topic_prefix")
+    if not _is_blank(kb_topic_prefix):
+        _tp = str(kb_topic_prefix).strip().lower()
+        if _tp not in KB_TOPIC_PREFIX_MODES:
+            errors.append(
+                f"Invalid knowledge_base.topic_prefix: {kb_topic_prefix} "
+                f"(expected one of: {', '.join(sorted(KB_TOPIC_PREFIX_MODES))})"
+            )
+
     llm_wire_api = _get_by_path(data, "llm.wire_api")
     if not _is_blank(llm_wire_api) and llm_wire_api not in (
         "chat_completions",
@@ -989,7 +1034,12 @@ def validate_config(
         )
 
     kb_root_raw = _get_by_path(data, "knowledge_base.root")
-    if check_paths and not _is_blank(kb_root_raw) and project_root is not None:
+    if (
+        check_paths
+        and not _is_blank(kb_root_raw)
+        and project_root is not None
+        and kb_backend != "obsidian_rest"
+    ):
         kb_root = project_root / str(kb_root_raw)
         if not kb_root.exists():
             errors.append(f"Missing path: {kb_root}")
@@ -1218,6 +1268,8 @@ def _parse_opencode_config(data: dict[str, Any]) -> OpenCodeConfig:
         auto=bool(data.get("auto", True)),
         complexity_threshold=_safe_float(data.get("complexity_threshold"), 0.2),
         model=str(data.get("model", "")),
+        base_url=str(data.get("base_url", "") or ""),
+        api_key_env=str(data.get("api_key_env", "") or ""),
         timeout_sec=_safe_int(data.get("timeout_sec"), 600),
         max_retries=_safe_int(data.get("max_retries"), 1),
         workspace_cleanup=bool(data.get("workspace_cleanup", True)),

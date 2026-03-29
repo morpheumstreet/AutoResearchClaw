@@ -151,6 +151,45 @@ def test_validate_config_rejects_invalid_knowledge_base_backend(tmp_path: Path):
     assert "Invalid knowledge_base.backend: sqlite" in result.errors
 
 
+def test_validate_config_obsidian_rest_requires_url_and_env(tmp_path: Path):
+    data = _valid_config_data()
+    data["knowledge_base"]["backend"] = "obsidian_rest"
+    data["knowledge_base"]["root"] = "ResearchClaw/kb"
+
+    result = validate_config(data, project_root=tmp_path, check_paths=False)
+    assert result.ok is False
+    assert any("obsidian_rest_base_url" in e for e in result.errors)
+    assert any("obsidian_rest_api_key_env" in e for e in result.errors)
+
+    data["knowledge_base"]["obsidian_rest_base_url"] = "https://127.0.0.1:27124"
+    data["knowledge_base"]["obsidian_rest_api_key_env"] = "OBSIDIAN_LOCAL_REST_API_KEY"
+    result = validate_config(data, project_root=tmp_path, check_paths=False)
+    assert result.ok is True
+
+
+def test_validate_config_rejects_invalid_knowledge_base_topic_prefix(tmp_path: Path):
+    data = _valid_config_data()
+    data["knowledge_base"]["topic_prefix"] = "maybe"
+
+    result = validate_config(data, project_root=tmp_path, check_paths=False)
+
+    assert result.ok is False
+    assert "Invalid knowledge_base.topic_prefix" in "".join(result.errors)
+
+
+def test_validate_config_obsidian_rest_skips_kb_path_on_disk(tmp_path: Path):
+    """Vault prefix is not a local directory; path validation is skipped."""
+    data = _valid_config_data()
+    data["knowledge_base"]["backend"] = "obsidian_rest"
+    data["knowledge_base"]["root"] = "no/such/local/path"
+    data["knowledge_base"]["obsidian_rest_base_url"] = "https://127.0.0.1:27124"
+    data["knowledge_base"]["obsidian_rest_api_key_env"] = "OBSIDIAN_LOCAL_REST_API_KEY"
+
+    result = validate_config(data, project_root=tmp_path, check_paths=True)
+    assert result.ok is True
+    assert not any(str(e).startswith("Missing path:") for e in result.errors)
+
+
 def test_validate_config_accepts_llm_wire_api_responses(tmp_path: Path):
     data = _valid_config_data()
     data["llm"]["wire_api"] = "responses"

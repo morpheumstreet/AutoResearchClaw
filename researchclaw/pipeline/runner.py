@@ -13,6 +13,7 @@ from researchclaw.adapters import AdapterBundle
 from researchclaw.config import RCConfig
 from researchclaw.evolution import EvolutionStore, extract_lessons
 from researchclaw.knowledge.base import write_stage_to_kb
+from researchclaw.knowledge.obsidian_rest import obsidian_rest_settings_from_config
 from researchclaw.pipeline.executor import StageResult, execute_stage
 from researchclaw.pipeline.stages import (
     DECISION_ROLLBACK,
@@ -422,6 +423,13 @@ def execute_pipeline(
     started = False
     total_stages = len(STAGE_SEQUENCE)
 
+    obsidian_rest = None
+    if kb_root is not None and config.knowledge_base.backend == "obsidian_rest":
+        try:
+            obsidian_rest = obsidian_rest_settings_from_config(config.knowledge_base)
+        except ValueError as exc:
+            logger.warning("Knowledge base (obsidian_rest): %s", exc)
+
     for stage in STAGE_SEQUENCE:
         started = _should_start(stage, from_stage, started)
         if not started:
@@ -479,6 +487,9 @@ def execute_pipeline(
                     stage_dir=stage_dir,
                     backend=config.knowledge_base.backend,
                     topic=config.research.topic,
+                    domains=config.research.domains,
+                    topic_prefix_mode=config.knowledge_base.topic_prefix,
+                    obsidian_rest=obsidian_rest,
                 )
             except Exception:  # noqa: BLE001
                 pass
